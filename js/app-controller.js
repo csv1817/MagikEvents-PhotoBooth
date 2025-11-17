@@ -539,6 +539,108 @@ class AppController {
     }
 
     /**
+     * Print image - same functionality as gallery page
+     */
+    printImage() {
+        try {
+            const canvas = document.getElementById('compositeCanvas');
+            if (!canvas || !canvas.width || !canvas.height) {
+                alert('No image available to print. Please create the final image first.');
+                return;
+            }
+
+            const imageData = canvas.toDataURL('image/png');
+            const filename = `photobooth_${Date.now()}.png`;
+
+            // Create a new window for printing
+            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            
+            // Create the print content HTML - only the image
+            const printContent = `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Print Image</title>
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        
+                        body {
+                            background: white;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                            padding: 0;
+                        }
+                        
+                        .print-image {
+                            max-width: 100%;
+                            max-height: 100vh;
+                            object-fit: contain;
+                        }
+                        
+                        @media print {
+                            body {
+                                margin: 0;
+                                padding: 0;
+                            }
+                            
+                            .print-image {
+                                max-width: 100%;
+                                max-height: 100vh;
+                                object-fit: contain;
+                            }
+                            
+                            @page {
+                                margin: 0;
+                                size: auto;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <img src="${imageData}" alt="Print Image" class="print-image">
+                    
+                    <script>
+                        // Auto-print when page loads
+                        window.onload = function() {
+                            setTimeout(() => {
+                                window.print();
+                                // Close the window after printing
+                                setTimeout(() => {
+                                    window.close();
+                                }, 1000);
+                            }, 500);
+                        };
+                        
+                        // Handle print dialog close
+                        window.onafterprint = function() {
+                            window.close();
+                        };
+                    </script>
+                </body>
+                </html>
+            `;
+            
+            // Write content to the new window
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            
+            // Focus the new window
+            printWindow.focus();
+        } catch (error) {
+            console.error('Print failed:', error);
+            alert('Could not print image. Please try again.');
+        }
+    }
+
+    /**
      * Start over with new photo
      */
     startOver() {
