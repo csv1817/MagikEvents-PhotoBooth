@@ -83,15 +83,15 @@
                                 <img id="targetImagePreview" class="target-image-preview">
                             </div>
                         </div>
-                        <div class="preview-label">Adjust position and zoom below</div>
+                        <div class="preview-label">Scroll to move • Ctrl+Scroll to zoom • Shift+Scroll for horizontal</div>
                     </div>
 
                     <div class="zoom-controls">
                         <h3>Adjustment Controls</h3>
                         <div class="controls-grid">
                             <div class="control-group">
-                                <label for="zoomSlider">🔍 Zoom: <span id="zoomValue">100%</span></label>
-                                <input type="range" id="zoomSlider" class="control-slider" min="50" max="300" value="100">
+                                <label for="zoomSlider">🔍 Zoom: <span id="zoomValue">50%</span></label>
+                                <input type="range" id="zoomSlider" class="control-slider" min="10" max="500" value="50">
                             </div>
                             <div class="control-group">
                                 <label for="xSlider">↔️ Horizontal: <span id="xValue">0</span></label>
@@ -100,6 +100,19 @@
                             <div class="control-group">
                                 <label for="ySlider">↕️ Vertical: <span id="yValue">0</span></label>
                                 <input type="range" id="ySlider" class="control-slider" min="-100" max="100" value="0">
+                            </div>
+                        </div>
+
+                        <div class="position-controls">
+                            <h4>Position Controls</h4>
+                            <div class="direction-pad">
+                                <button class="direction-btn" onclick="window.imageProcessor.nudgePosition(0, -5)" title="Move Up">⬆️</button>
+                                <div class="direction-row">
+                                    <button class="direction-btn" onclick="window.imageProcessor.nudgePosition(-5, 0)" title="Move Left">⬅️</button>
+                                    <button class="direction-btn center-btn" onclick="window.imageProcessor.resetPosition()" title="Center">⏺️</button>
+                                    <button class="direction-btn" onclick="window.imageProcessor.nudgePosition(5, 0)" title="Move Right">➡️</button>
+                                </div>
+                                <button class="direction-btn" onclick="window.imageProcessor.nudgePosition(0, 5)" title="Move Down">⬇️</button>
                             </div>
                         </div>
                     </div>

@@ -7,7 +7,7 @@ class ImageProcessor {
     constructor() {
         this.targetImage = null;
         this.backgroundImage = null;
-        this.zoomLevel = 100;
+        this.zoomLevel = 50;
         this.xPosition = 0;
         this.yPosition = 0;
     }
@@ -169,10 +169,44 @@ class ImageProcessor {
      * Reset all settings
      */
     reset() {
-        this.zoomLevel = 100;
+        this.zoomLevel = 50;
         this.xPosition = 0;
         this.yPosition = 0;
         this.backgroundImage = null;
+    }
+
+    /**
+     * Nudge position by small increments
+     * @param {number} deltaX - X position change
+     * @param {number} deltaY - Y position change
+     */
+    nudgePosition(deltaX, deltaY) {
+        this.xPosition = Math.max(-100, Math.min(100, this.xPosition + deltaX));
+        this.yPosition = Math.max(-100, Math.min(100, this.yPosition + deltaY));
+
+        // Update the slider values and displays
+        document.getElementById('xSlider').value = this.xPosition;
+        document.getElementById('ySlider').value = this.yPosition;
+        document.getElementById('xValue').textContent = this.xPosition;
+        document.getElementById('yValue').textContent = this.yPosition;
+
+        this.updatePreview();
+    }
+
+    /**
+     * Reset position to center
+     */
+    resetPosition() {
+        this.xPosition = 0;
+        this.yPosition = 0;
+
+        // Update the slider values and displays
+        document.getElementById('xSlider').value = 0;
+        document.getElementById('ySlider').value = 0;
+        document.getElementById('xValue').textContent = 0;
+        document.getElementById('yValue').textContent = 0;
+
+        this.updatePreview();
     }
 
     /**
@@ -200,12 +234,14 @@ class ImageProcessor {
         const scale = this.zoomLevel / 100;
         previewWidth *= scale;
         previewHeight *= scale;
-        
-        const maxOffsetX = Math.max(0, (previewWidth - containerW) / 2);
-        const maxOffsetY = Math.max(0, (previewHeight - containerH) / 2);
+
+        // Allow movement in all scenarios - use container dimensions as max range
+        // If image is larger than container, use overflow; if smaller, use container size
+        const maxOffsetX = Math.max((previewWidth - containerW) / 2, containerW / 2);
+        const maxOffsetY = Math.max((previewHeight - containerH) / 2, containerH / 2);
         const xOffset = (this.xPosition / 100) * maxOffsetX;
         const yOffset = (this.yPosition / 100) * maxOffsetY;
-        
+
         previewImg.style.width = previewWidth + 'px';
         previewImg.style.height = previewHeight + 'px';
         previewImg.style.left = (containerW - previewWidth) / 2 + xOffset + 'px';
@@ -310,16 +346,40 @@ class ImageProcessor {
             this.setZoom(parseInt(e.target.value));
             document.getElementById('zoomValue').textContent = this.zoomLevel + '%';
         };
-        
+
         document.getElementById('xSlider').oninput = (e) => {
             this.setXPosition(parseInt(e.target.value));
             document.getElementById('xValue').textContent = this.xPosition;
         };
-        
+
         document.getElementById('ySlider').oninput = (e) => {
             this.setYPosition(parseInt(e.target.value));
             document.getElementById('yValue').textContent = this.yPosition;
         };
+
+        // Add mouse wheel support for moving/zooming the image
+        const previewContainer = document.getElementById('backgroundPreviewContainer');
+        if (previewContainer) {
+            previewContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+
+                const scrollAmount = e.deltaY > 0 ? 5 : -5;
+
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl/Cmd + Scroll = Zoom
+                    const newZoom = Math.max(10, Math.min(500, this.zoomLevel - scrollAmount * 2));
+                    this.setZoom(newZoom);
+                    document.getElementById('zoomSlider').value = newZoom;
+                    document.getElementById('zoomValue').textContent = newZoom + '%';
+                } else if (e.shiftKey) {
+                    // Shift + Scroll = Move horizontally
+                    this.nudgePosition(-scrollAmount, 0);
+                } else {
+                    // Regular Scroll = Move vertically
+                    this.nudgePosition(0, scrollAmount);
+                }
+            }, { passive: false });
+        }
     }
 
     /**
@@ -453,7 +513,7 @@ class ImageProcessor {
         }
         
         // Use high resolution for final output
-        const qualitySettings = window.cameraManager?.getQualitySettings() || { finalWidth: 1200, finalHeight: 1800 };
+        const qualitySettings = window.cameraManager?.getQualitySettings() || { finalWidth: 1800, finalHeight: 1200 };
         canvas.width = qualitySettings.finalWidth;
         canvas.height = qualitySettings.finalHeight;
         
@@ -476,19 +536,20 @@ class ImageProcessor {
             
             const baseOffsetX = (canvas.width - scaledWidth) / 2;
             const baseOffsetY = (canvas.height - scaledHeight) / 2;
-            const maxOffsetX = Math.max(0, (scaledWidth - canvas.width) / 2);
-            const maxOffsetY = Math.max(0, (scaledHeight - canvas.height) / 2);
+            // Allow movement in all scenarios - use canvas dimensions as max range
+            const maxOffsetX = Math.max((scaledWidth - canvas.width) / 2, canvas.width / 2);
+            const maxOffsetY = Math.max((scaledHeight - canvas.height) / 2, canvas.height / 2);
             const finalOffsetX = baseOffsetX + (this.xPosition / 100) * maxOffsetX;
             const finalOffsetY = baseOffsetY + (this.yPosition / 100) * maxOffsetY;
             
             // Clear canvas with transparent background
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw background image at high quality
-            ctx.drawImage(this.backgroundImage, finalOffsetX, finalOffsetY, scaledWidth, scaledHeight);
-            
-            // Draw target frame/overlay at high quality
+
+            // Draw target frame/overlay first (behind)
             ctx.drawImage(this.targetImage, 0, 0, canvas.width, canvas.height);
+
+            // Draw background image on top at high quality
+            ctx.drawImage(this.backgroundImage, finalOffsetX, finalOffsetY, scaledWidth, scaledHeight);
             
             console.log('Final composite created at maximum quality');
             console.log('Composite canvas dimensions:', canvas.width, 'x', canvas.height);

@@ -12,8 +12,8 @@ class CameraManager {
         
         // High quality settings
         this.HIGH_QUALITY_SETTINGS = {
-            finalWidth: 1200,
-            finalHeight: 1800,
+            finalWidth: 1800,
+            finalHeight: 1200,
             jpegQuality: 1.0,
             pngQuality: 1.0,
             baseVideoConstraints: {
