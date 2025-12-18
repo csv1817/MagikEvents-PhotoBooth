@@ -455,7 +455,9 @@ class AppController {
             // Prepare metadata
             const metadata = {
                 resolution: `${canvas.width}x${canvas.height}`,
-                settings: window.imageProcessor.getSettings()
+                settings: window.imageProcessor.getSettings(),
+                associationFlag: window.getAssociationFlag ? window.getAssociationFlag() : 0,
+                associationData: window.ASSOCIATION_CONFIG || {}
             };
 
             uploadProgressBar.style.width = '70%';

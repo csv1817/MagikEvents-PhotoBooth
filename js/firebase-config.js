@@ -1,6 +1,20 @@
 /**
  * Firebase Configuration and Services
  * MagikEvents PhotoBooth Application
+ *
+ * ASSOCIATION FLAG USAGE:
+ * To enable association tracking, set the ASSOCIATION_CONFIG values below.
+ * When any association data is present (name, id, or event), the associationFlag
+ * will automatically be set to 1 for all saved images.
+ *
+ * Example:
+ *   ASSOCIATION_CONFIG.name = "ABC Corporation";
+ *   ASSOCIATION_CONFIG.id = "12345";
+ *   ASSOCIATION_CONFIG.event = "Annual Conference 2024";
+ *
+ * This will save each image with:
+ *   - associationFlag: 1
+ *   - associationData: { name: "ABC Corporation", id: "12345", event: "Annual Conference 2024" }
  */
 
 // Firebase Configuration
@@ -14,6 +28,35 @@ const FIREBASE_CONFIG = {
     measurementId: "G-S21N9W5PCR",
     databaseURL: "https://magikevents-bb514-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
+
+// Association Configuration
+// Set association data here when available
+const ASSOCIATION_CONFIG = {
+    name: "",  // Association name
+    id: "",    // Association ID
+    event: "", // Event name
+    // Add association data as needed
+};
+
+/**
+ * Check if association data is available
+ * @returns {boolean} True if association data exists
+ */
+function hasAssociationData() {
+    return !!(ASSOCIATION_CONFIG.name || ASSOCIATION_CONFIG.id || ASSOCIATION_CONFIG.event);
+}
+
+/**
+ * Get association flag value
+ * @returns {number} 1 if association data available, 0 otherwise
+ */
+function getAssociationFlag() {
+    return hasAssociationData() ? 1 : 0;
+}
+
+// Make association config globally available
+window.ASSOCIATION_CONFIG = ASSOCIATION_CONFIG;
+window.getAssociationFlag = getAssociationFlag;
 
 // Firebase Services Initialization
 class FirebaseService {
