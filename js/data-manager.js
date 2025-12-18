@@ -85,50 +85,100 @@ class DataManager {
     }
 
     /**
-     * Load images from database
-     * @param {Function} callback - Callback function for real-time updates
-     * @returns {Promise<void>}
+     * Load images from database with pagination
+     * @param {number} limit - Number of images to load (default: 20)
+     * @param {string} lastKey - Last image key for pagination (optional)
+     * @returns {Promise<Array>} Promise that resolves with array of images
      */
-    async loadImages(callback) {
+    async loadImages(limit = 20, lastKey = null) {
         if (!this.isInitialized) {
             throw new Error('Data manager not initialized');
         }
 
         try {
-            const { ref, onValue } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
-            
+            console.log(`Loading images with limit: ${limit}, lastKey: ${lastKey}`);
+            const { ref, query, orderByKey, limitToLast, endBefore, get } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+
             const imagesRef = ref(this.database, 'magik-events-images');
-            
-            onValue(imagesRef, (snapshot) => {
-                const images = [];
-                
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    Object.keys(data).forEach(key => {
-                        images.push({
-                            id: key,
-                            ...data[key]
-                        });
-                    });
 
-                    // Sort by upload date (newest first)
-                    images.sort((a, b) => {
-                        if (a.uploadedAt && b.uploadedAt) {
-                            return b.uploadedAt - a.uploadedAt;
-                        }
-                        return 0;
-                    });
-                }
+            // Build query with pagination
+            let imageQuery;
+            if (lastKey) {
+                // Load more images before the lastKey
+                imageQuery = query(
+                    imagesRef,
+                    orderByKey(),
+                    endBefore(lastKey),
+                    limitToLast(limit)
+                );
+            } else {
+                // Load initial batch (most recent images)
+                imageQuery = query(
+                    imagesRef,
+                    orderByKey(),
+                    limitToLast(limit)
+                );
+            }
 
-                callback(images);
-            }, (error) => {
-                console.error('Error loading images:', error);
-                callback([], error);
-            });
-            
+            console.log('Fetching data from Firebase...');
+            // Use get() instead of onValue() to avoid continuous listening
+            const snapshot = await get(imageQuery);
+            console.log('Firebase data fetched, snapshot exists:', snapshot.exists());
+
+            const images = [];
+
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                console.log('Number of items in snapshot:', Object.keys(data).length);
+                Object.keys(data).forEach(key => {
+                    images.push({
+                        id: key,
+                        ...data[key]
+                    });
+                });
+
+                // Sort by upload date (newest first)
+                images.sort((a, b) => {
+                    if (a.uploadedAt && b.uploadedAt) {
+                        return b.uploadedAt - a.uploadedAt;
+                    }
+                    return 0;
+                });
+            }
+
+            console.log('Returning images array with length:', images.length);
+            return images;
+
         } catch (error) {
-            console.error('Error setting up image listener:', error);
+            console.error('Error loading images:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Get total image count
+     * @returns {Promise<number>} Total number of images
+     */
+    async getImageCount() {
+        if (!this.isInitialized) {
+            throw new Error('Data manager not initialized');
+        }
+
+        try {
+            const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+
+            const imagesRef = ref(this.database, 'magik-events-images');
+            const snapshot = await get(imagesRef);
+
+            if (snapshot.exists()) {
+                return Object.keys(snapshot.val()).length;
+            }
+
+            return 0;
+
+        } catch (error) {
+            console.error('Error getting image count:', error);
+            return 0;
         }
     }
 

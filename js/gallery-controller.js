@@ -4,143 +4,264 @@
  */
 
 class GalleryController {
-    constructor() {
-        this.allImages = [];
-        this.isInitialized = false;
+  constructor() {
+    this.allImages = [];
+    this.isInitialized = false;
+    this.imagesPerPage = 10;
+    this.hasMoreImages = true;
+  }
+
+  /**
+   * Initialize gallery controller
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    try {
+      console.log("Initializing Gallery Controller...");
+
+      // Initialize Firebase service
+      await window.firebaseService.initialize();
+      await window.dataManager.initialize();
+
+      this.isInitialized = true;
+      console.log("Gallery Controller initialized successfully");
+    } catch (error) {
+      console.error("Gallery Controller initialization failed:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Initialize gallery controller
-     * @returns {Promise<void>}
-     */
-    async initialize() {
-        try {
-            console.log('Initializing Gallery Controller...');
-            
-            // Initialize Firebase service
-            await window.firebaseService.initialize();
-            await window.dataManager.initialize();
-            
-            this.isInitialized = true;
-            console.log('Gallery Controller initialized successfully');
-            
-        } catch (error) {
-            console.error('Gallery Controller initialization failed:', error);
-            throw error;
-        }
+  /**
+   * Load gallery images (initial load)
+   * @returns {Promise<void>}
+   */
+  async loadGalleryImages() {
+    const loadingMessage = document.getElementById("loadingMessage");
+    const errorMessage = document.getElementById("errorMessage");
+    const galleryTable = document.getElementById("galleryTable");
+    const galleryStats = document.getElementById("galleryStats");
+    const emptyGallery = document.getElementById("emptyGallery");
+    const imageCount = document.getElementById("imageCount");
+    const loadMoreBtn = document.getElementById("loadMoreBtn");
+
+    try {
+      // Show loading state
+      this.showLoadingState(
+        loadingMessage,
+        errorMessage,
+        galleryTable,
+        galleryStats,
+        emptyGallery
+      );
+
+      console.log("Starting to load images...");
+      // Load initial batch of images
+      const images = await window.dataManager.loadImages(this.imagesPerPage);
+      console.log("Loaded images:", images.length);
+
+      this.allImages = images;
+      // If we got a full batch, assume there might be more
+      this.hasMoreImages = images.length >= this.imagesPerPage;
+      this.handleImagesLoaded(
+        images,
+        loadingMessage,
+        galleryTable,
+        galleryStats,
+        emptyGallery,
+        imageCount,
+        loadMoreBtn
+      );
+      console.log("Gallery loaded successfully");
+    } catch (error) {
+      console.error("Error loading gallery images:", error);
+      this.showErrorState(errorMessage, loadingMessage, error.message);
     }
+  }
 
-    /**
-     * Load gallery images
-     * @returns {Promise<void>}
-     */
-    async loadGalleryImages() {
-        const loadingMessage = document.getElementById('loadingMessage');
-        const errorMessage = document.getElementById('errorMessage');
-        const galleryTable = document.getElementById('galleryTable');
-        const galleryStats = document.getElementById('galleryStats');
-        const emptyGallery = document.getElementById('emptyGallery');
-        const imageCount = document.getElementById('imageCount');
+  /**
+   * Load more images (pagination)
+   * @returns {Promise<void>}
+   */
+  async loadMoreImages() {
+    const loadMoreBtn = document.getElementById("loadMoreBtn");
+    const loadMoreContainer = document.getElementById("loadMoreContainer");
+    const errorMessage = document.getElementById("errorMessage");
 
-        try {
-            // Show loading state
-            this.showLoadingState(loadingMessage, errorMessage, galleryTable, galleryStats, emptyGallery);
+    try {
+      // Disable button and show loading state
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = "Loading...";
 
-            // Load images from database
-            await window.dataManager.loadImages((images, error) => {
-                if (error) {
-                    this.showErrorState(errorMessage, loadingMessage, error.message);
-                    return;
-                }
+      // Get the oldest image key for pagination
+      const lastKey =
+        this.allImages.length > 0
+          ? this.allImages[this.allImages.length - 1].id
+          : null;
 
-                this.allImages = images;
-                this.handleImagesLoaded(images, loadingMessage, galleryTable, galleryStats, emptyGallery, imageCount);
-            });
+      // Load next batch
+      const images = await window.dataManager.loadImages(
+        this.imagesPerPage,
+        lastKey
+      );
 
-        } catch (error) {
-            console.error('Error loading gallery images:', error);
-            this.showErrorState(errorMessage, loadingMessage, error.message);
-        }
+      // Append new images to existing array
+      this.allImages = this.allImages.concat(images);
+
+      // Check if there are more images to load (if we got less than requested, we're at the end)
+      this.hasMoreImages = images.length >= this.imagesPerPage;
+
+      // Update the gallery display
+      this.displayImages(images);
+      this.updateImageCount();
+
+      // Update button state
+      if (this.hasMoreImages) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = "Load More";
+      } else {
+        if (loadMoreContainer) loadMoreContainer.style.display = "none";
+      }
+    } catch (error) {
+      console.error("Error loading more images:", error);
+      errorMessage.textContent = `Error loading more images: ${error.message}`;
+      errorMessage.style.display = "block";
+      loadMoreBtn.disabled = false;
+      loadMoreBtn.textContent = "Load More";
     }
+  }
 
-    /**
-     * Show loading state
-     * @param {HTMLElement} loadingMessage - Loading message element
-     * @param {HTMLElement} errorMessage - Error message element
-     * @param {HTMLElement} galleryTable - Gallery table element
-     * @param {HTMLElement} galleryStats - Gallery stats element
-     * @param {HTMLElement} emptyGallery - Empty gallery element
-     */
-    showLoadingState(loadingMessage, errorMessage, galleryTable, galleryStats, emptyGallery) {
-        loadingMessage.style.display = 'block';
-        errorMessage.style.display = 'none';
-        galleryTable.style.display = 'none';
-        galleryStats.style.display = 'none';
-        emptyGallery.style.display = 'none';
-    }
+  /**
+   * Show loading state
+   * @param {HTMLElement} loadingMessage - Loading message element
+   * @param {HTMLElement} errorMessage - Error message element
+   * @param {HTMLElement} galleryTable - Gallery table element
+   * @param {HTMLElement} galleryStats - Gallery stats element
+   * @param {HTMLElement} emptyGallery - Empty gallery element
+   */
+  showLoadingState(
+    loadingMessage,
+    errorMessage,
+    galleryTable,
+    galleryStats,
+    emptyGallery
+  ) {
+    loadingMessage.style.display = "block";
+    errorMessage.style.display = "none";
+    galleryTable.style.display = "none";
+    galleryStats.style.display = "none";
+    emptyGallery.style.display = "none";
+  }
 
-    /**
-     * Show error state
-     * @param {HTMLElement} errorMessage - Error message element
-     * @param {HTMLElement} loadingMessage - Loading message element
-     * @param {string} message - Error message
-     */
-    showErrorState(errorMessage, loadingMessage, message) {
-        loadingMessage.style.display = 'none';
-        errorMessage.textContent = `Error loading gallery: ${message}`;
-        errorMessage.style.display = 'block';
-    }
+  /**
+   * Show error state
+   * @param {HTMLElement} errorMessage - Error message element
+   * @param {HTMLElement} loadingMessage - Loading message element
+   * @param {string} message - Error message
+   */
+  showErrorState(errorMessage, loadingMessage, message) {
+    loadingMessage.style.display = "none";
+    errorMessage.textContent = `Error loading gallery: ${message}`;
+    errorMessage.style.display = "block";
+  }
 
-    /**
-     * Handle images loaded
-     * @param {Array} images - Array of images
-     * @param {HTMLElement} loadingMessage - Loading message element
-     * @param {HTMLElement} galleryTable - Gallery table element
-     * @param {HTMLElement} galleryStats - Gallery stats element
-     * @param {HTMLElement} emptyGallery - Empty gallery element
-     * @param {HTMLElement} imageCount - Image count element
-     */
-    handleImagesLoaded(images, loadingMessage, galleryTable, galleryStats, emptyGallery, imageCount) {
-        loadingMessage.style.display = 'none';
+  /**
+   * Handle images loaded
+   * @param {Array} images - Array of images
+   * @param {HTMLElement} loadingMessage - Loading message element
+   * @param {HTMLElement} galleryTable - Gallery table element
+   * @param {HTMLElement} galleryStats - Gallery stats element
+   * @param {HTMLElement} emptyGallery - Empty gallery element
+   * @param {HTMLElement} imageCount - Image count element
+   * @param {HTMLElement} loadMoreBtn - Load more button element
+   */
+  handleImagesLoaded(
+    images,
+    loadingMessage,
+    galleryTable,
+    galleryStats,
+    emptyGallery,
+    imageCount,
+    loadMoreBtn
+  ) {
+    loadingMessage.style.display = "none";
+    const loadMoreContainer = document.getElementById("loadMoreContainer");
 
-        if (images.length === 0) {
-            emptyGallery.style.display = 'block';
+    if (images.length === 0) {
+      emptyGallery.style.display = "block";
+      if (loadMoreBtn) loadMoreBtn.style.display = "none";
+      if (loadMoreContainer) loadMoreContainer.style.display = "none";
+    } else {
+      imageCount.textContent = `${this.allImages.length} image${
+        this.allImages.length !== 1 ? "s" : ""
+      }`;
+      galleryStats.style.display = "flex";
+      this.displayImages(images);
+      galleryTable.style.display = "block";
+
+      // Show/hide load more button
+      if (loadMoreBtn && loadMoreContainer) {
+        if (this.hasMoreImages) {
+          loadMoreContainer.style.display = "block";
+          loadMoreBtn.style.display = "inline-block";
         } else {
-            imageCount.textContent = images.length;
-            galleryStats.style.display = 'flex';
-            this.displayImages(images);
-            galleryTable.style.display = 'block';
+          loadMoreContainer.style.display = "none";
         }
+      }
     }
+  }
 
-    /**
-     * Display images in table
-     * @param {Array} images - Array of images
-     */
-    displayImages(images) {
-        const tableBody = document.getElementById('galleryTableBody');
-        tableBody.innerHTML = '';
+  /**
+   * Append new images to table
+   * @param {Array} images - Array of new images
+   */
+  appendImages(images) {
+    const tableBody = document.getElementById("galleryTableBody");
 
-        images.forEach((image, index) => {
-            // Display numbers from highest to lowest (total - current index)
-            const rowNumber = images.length - index;
-            const row = this.createImageRow(image, rowNumber);
-            tableBody.appendChild(row);
-        });
-    }
+    images.forEach((image) => {
+      const rowNumber = this.allImages.length - this.allImages.indexOf(image);
+      const row = this.createImageRow(image, rowNumber);
+      tableBody.appendChild(row);
+    });
+  }
 
-    /**
-     * Create image row
-     * @param {Object} image - Image object
-     * @param {number} rowNumber - Row number
-     * @returns {HTMLElement} Table row element
-     */
-    createImageRow(image, rowNumber) {
-        const row = document.createElement('tr');
-        
-        const dateString = this.formatDate(image.uploadedAt);
+  /**
+   * Update image count display
+   */
+  updateImageCount() {
+    const imageCount = document.getElementById("imageCount");
+    imageCount.textContent = `${this.allImages.length} image${
+      this.allImages.length !== 1 ? "s" : ""
+    }`;
+  }
 
-        row.innerHTML = `
+  /**
+   * Display images in table
+   * @param {Array} images - Array of images
+   */
+  displayImages(images) {
+    const tableBody = document.getElementById("galleryTableBody");
+    tableBody.innerHTML = "";
+
+    this.allImages.forEach((image, index) => {
+      // Display numbers from highest to lowest (total - current index)
+      const rowNumber = this.allImages.length - index;
+      const row = this.createImageRow(image, rowNumber);
+      tableBody.appendChild(row);
+    });
+  }
+
+  /**
+   * Create image row
+   * @param {Object} image - Image object
+   * @param {number} rowNumber - Row number
+   * @returns {HTMLElement} Table row element
+   */
+  createImageRow(image, rowNumber) {
+    const row = document.createElement("tr");
+
+    const dateString = this.formatDate(image.uploadedAt);
+
+    row.innerHTML = `
             <td class="row-number">${rowNumber}</td>
             <td>
                 <img class="image-thumbnail" 
@@ -168,65 +289,65 @@ class GalleryController {
             </td>
         `;
 
-        return row;
-    }
+    return row;
+  }
 
-    /**
-     * Format date
-     * @param {number} timestamp - Timestamp
-     * @returns {string} Formatted date
-     */
-    formatDate(timestamp) {
-        if (!timestamp) return 'Unknown date';
-        return new Date(timestamp).toLocaleDateString();
-    }
+  /**
+   * Format date
+   * @param {number} timestamp - Timestamp
+   * @returns {string} Formatted date
+   */
+  formatDate(timestamp) {
+    if (!timestamp) return "Unknown date";
+    return new Date(timestamp).toLocaleDateString();
+  }
 
-    /**
-     * Open modal with image
-     * @param {string} imageData - Base64 image data
-     * @param {string} filename - Image filename
-     */
-    openModal(imageData, filename) {
-        const modal = document.getElementById('imageModal');
-        const modalImage = document.getElementById('modalImage');
-        modalImage.src = imageData;
-        modalImage.alt = filename;
-        modal.style.display = 'block';
-    }
+  /**
+   * Open modal with image
+   * @param {string} imageData - Base64 image data
+   * @param {string} filename - Image filename
+   */
+  openModal(imageData, filename) {
+    const modal = document.getElementById("imageModal");
+    const modalImage = document.getElementById("modalImage");
+    modalImage.src = imageData;
+    modalImage.alt = filename;
+    modal.style.display = "block";
+  }
 
-    /**
-     * Close modal
-     */
-    closeModal() {
-        const modal = document.getElementById('imageModal');
-        modal.style.display = 'none';
-    }
+  /**
+   * Close modal
+   */
+  closeModal() {
+    const modal = document.getElementById("imageModal");
+    modal.style.display = "none";
+  }
 
-    /**
-     * Download image
-     * @param {string} imageData - Base64 image data
-     * @param {string} filename - Image filename
-     */
-    downloadImage(imageData, filename) {
-        try {
-            window.dataManager.downloadImage(imageData, filename);
-        } catch (error) {
-            console.error('Error downloading image:', error);
-            alert('Error downloading image. Please try again.');
-        }
+  /**
+   * Download image
+   * @param {string} imageData - Base64 image data
+   * @param {string} filename - Image filename
+   */
+  downloadImage(imageData, filename) {
+    try {
+      window.dataManager.downloadImage(imageData, filename);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      alert("Error downloading image. Please try again.");
     }
+  }
 
-    /**
-     * Print image
-     * @param {string} imageData - Base64 image data
-     * @param {string} filename - Image filename
-     */
-    printImage(imageData, filename) {
-        // Create a new window for printing
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-        
-        // Create the print content HTML - only the image
-        const printContent = `
+  /**
+   * Print image
+   * @param {string} imageData - Base64 image data
+   * @param {string} filename - Image filename
+   */
+  printImage(imageData, filename) {
+    // Create a new window for printing
+    const printWindow = window.open("", "_blank", "width=800,height=600");
+
+    // Create the print content HTML - only the image
+    const printContent = `
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -297,117 +418,127 @@ class GalleryController {
             </body>
             </html>
         `;
-        
-        // Write content to the new window
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-        
-        // Focus the new window
-        printWindow.focus();
+
+    // Write content to the new window
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+
+    // Focus the new window
+    printWindow.focus();
+  }
+
+  /**
+   * Delete image
+   * @param {string} imageId - Image ID
+   * @param {string} filename - Image filename
+   * @returns {Promise<void>}
+   */
+  async deleteImage(imageId, filename) {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${filename}"? This action cannot be undone.`
+      )
+    ) {
+      return;
     }
 
-    /**
-     * Delete image
-     * @param {string} imageId - Image ID
-     * @param {string} filename - Image filename
-     * @returns {Promise<void>}
-     */
-    async deleteImage(imageId, filename) {
-        if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
-            return;
-        }
+    try {
+      await window.dataManager.deleteImage(imageId);
+      // The onValue listener will automatically update the UI
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      alert(`Error deleting image: ${error.message}`);
+    }
+  }
 
-        try {
-            await window.dataManager.deleteImage(imageId);
-            // The onValue listener will automatically update the UI
-        } catch (error) {
-            console.error('Error deleting image:', error);
-            alert(`Error deleting image: ${error.message}`);
-        }
+  /**
+   * Delete all images using existing delete functionality
+   * @returns {Promise<void>}
+   */
+  async deleteAllImages() {
+    const imageCount = this.allImages.length;
+    if (imageCount === 0) {
+      alert("No images to delete.");
+      return;
     }
 
-    /**
-     * Delete all images using existing delete functionality
-     * @returns {Promise<void>}
-     */
-    async deleteAllImages() {
-        const imageCount = this.allImages.length;
-        if (imageCount === 0) {
-            alert('No images to delete.');
-            return;
-        }
-
-        const message = `Are you sure you want to delete ALL ${imageCount} image${imageCount !== 1 ? 's' : ''}? This action cannot be undone.`;
-        if (!confirm(message)) {
-            return;
-        }
-
-        // Double confirmation for safety
-        if (!confirm('This is your last chance. Are you absolutely sure you want to delete ALL images?')) {
-            return;
-        }
-
-        try {
-            // Delete each image using existing deleteImage functionality
-            for (const image of this.allImages) {
-                await window.dataManager.deleteImage(image.id);
-            }
-            console.log('All images deleted successfully');
-        } catch (error) {
-            console.error('Error deleting all images:', error);
-            alert(`Error deleting all images: ${error.message}`);
-        }
+    const message = `Are you sure you want to delete ALL ${imageCount} image${
+      imageCount !== 1 ? "s" : ""
+    }? This action cannot be undone.`;
+    if (!confirm(message)) {
+      return;
     }
 
-    /**
-     * Setup event listeners
-     */
-    setupEventListeners() {
-        // Close modal when clicking outside the image
-        document.getElementById('imageModal').addEventListener('click', (e) => {
-            if (e.target === this) {
-                this.closeModal();
-            }
-        });
-
-        // Close modal with Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeModal();
-            }
-        });
-
-        // Global error handling
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
-        });
-
-        window.addEventListener('unhandledrejection', (event) => {
-            console.error('Unhandled promise rejection:', event.reason);
-        });
+    // Double confirmation for safety
+    if (
+      !confirm(
+        "This is your last chance. Are you absolutely sure you want to delete ALL images?"
+      )
+    ) {
+      return;
     }
 
-    /**
-     * Check if gallery is ready
-     * @returns {boolean} Ready status
-     */
-    isReady() {
-        return this.isInitialized;
+    try {
+      // Delete each image using existing deleteImage functionality
+      for (const image of this.allImages) {
+        await window.dataManager.deleteImage(image.id);
+      }
+      console.log("All images deleted successfully");
+    } catch (error) {
+      console.error("Error deleting all images:", error);
+      alert(`Error deleting all images: ${error.message}`);
     }
+  }
+
+  /**
+   * Setup event listeners
+   */
+  setupEventListeners() {
+    // Close modal when clicking outside the image
+    document.getElementById("imageModal").addEventListener("click", (e) => {
+      if (e.target === this) {
+        this.closeModal();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.closeModal();
+      }
+    });
+
+    // Global error handling
+    window.addEventListener("error", (event) => {
+      console.error("Global error:", event.error);
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      console.error("Unhandled promise rejection:", event.reason);
+    });
+  }
+
+  /**
+   * Check if gallery is ready
+   * @returns {boolean} Ready status
+   */
+  isReady() {
+    return this.isInitialized;
+  }
 }
 
 // Global gallery controller instance
 window.galleryController = new GalleryController();
 
 // Initialize gallery when DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await window.galleryController.initialize();
-        window.galleryController.setupEventListeners();
-        await window.galleryController.loadGalleryImages();
-        console.log('Gallery is ready!');
-    } catch (error) {
-        console.error('Failed to initialize gallery:', error);
-        alert('Failed to initialize gallery. Please refresh the page.');
-    }
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    await window.galleryController.initialize();
+    window.galleryController.setupEventListeners();
+    await window.galleryController.loadGalleryImages();
+    console.log("Gallery is ready!");
+  } catch (error) {
+    console.error("Failed to initialize gallery:", error);
+    alert("Failed to initialize gallery. Please refresh the page.");
+  }
 });
